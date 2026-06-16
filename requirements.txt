@@ -1,4 +1,6 @@
+gymnasium==1.2.3
 imageio==2.37.3
+mediapy==1.2.6
 numpy==2.4.6
 rsl_rl_lib==5.4.1
 tensordict==0.13.0
