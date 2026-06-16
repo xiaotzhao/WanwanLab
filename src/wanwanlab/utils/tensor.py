@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-def to_torch(x, device: str | torch.device) -> torch.tensor:
+def to_torch(x, device: str | torch.device) -> torch.Tensor:
     """Convert numpy-like input to torch on the target device
 
     Supports torch tensor, numpy array, and any array exposing "__dlpack__"
