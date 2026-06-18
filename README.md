@@ -6,25 +6,18 @@
 WanwanLab 基于 UniLab 机器人强化学习框架，用于人形机器人 / 机械臂仿真、任务规划与强化学习策略训练，适配 CUDA / CPU 多设备。
 环境前置要求
 
-    安装 Anaconda / Miniconda（推荐 Miniconda）
-    Python 版本：3.11（项目统一版本，不建议更换）
-    NVIDIA 用户：提前安装 CUDA Toolkit（匹配 PyTorch 版本）
+```bash
+# 0. If uv is not installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    git clone https://github.com/xiaotzhao/WanwanLab.git
-    cd WanwanLab
+# 1. Clone the repository
+git clone https://github.com/xiaotzhao/WanwanLab.git
+cd WanwanLab
 
-创建并激活虚拟环境 wanwanlab
+# 2. Install dependencies
+# Pick the setup command for your platform.
 
-    # 创建名为 wanwanlab 的conda环境，指定python3.11
-    conda create -n wanwanlab python=3.11 -y
-    
-激活环境
-
-    conda activate wanwanlab
-
-安装全部依赖
-    # 优先升级pip
-    pip install --upgrade pip
-    
-    # 读取 requirements.txt 批量安装依赖
-    pip install -r requirements.txt
+# Linux CUDA or macOS
+uv sync
+# Without shell completion setup: uv sync --extra motrix
+# If `make` is not installed: uv sync --extra motrix && uv run --no-sync unilab-complete install
