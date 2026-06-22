@@ -18,3 +18,33 @@ import logging
 from collections.abc import Sequence
 
 from wanwanlab.assets.hub import resolve_robot_asset_dir
+
+# robot name -> (ASSETS_ROOT_PATH-relative dir, completeness marker file)
+_ROBOT_ASSETS: dict[str, tuple[str, str]] = {
+    "x2": ("robots/x2/meshes", "pelvis.STL"),
+}
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--robot",
+        default="x2",
+        choices=sorted(_ROBOT_ASSETS),
+        help="Robot whose meshes to download (default: x2).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    args = _parse_args(argv)
+
+    directory, marker = _ROBOT_ASSETS[args.robot]
+    target = resolve_robot_asset_dir(directory, marker=marker)
+    count = len(list(target.glob("*.STL")))
+    print(f"{args.robot} meshes ready at {target} ({count} STL files)")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -27,8 +27,10 @@ _HF_SCENES_REPO_ID = "unilabsim/unilab-scenes"
 _HF_CHECKPOINTS_REPO_ID = "unilabsim/unilab-checkpoints"
 _HF_ROBOTS_REPO_ID = "unilabsim/unilab-robots"
 _HF_REPO_TYPE = "dataset"
-_HF_OFFICIAL_ENDPOINT = "https://hf-mirror.com"
+_HF_OFFICIAL_ENDPOINT = "https://huggingface.co"
 
+if "HF_ENDPOINT" not in os.environ:
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def resolve_motion_files(
     motion_file: str | Sequence[str],

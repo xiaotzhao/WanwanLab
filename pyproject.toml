@@ -94,7 +94,7 @@ warn_unused_configs = true
 ignore_missing_imports = true
 no_site_packages = true
 exclude = [
-    "src/wanwanlab/algos/torch/rsl_rl/", # vendored third-party, tracked in .gitignore
+    "src/wanwanlab/algos/rsl_rl/", # vendored third-party, tracked in .gitignore
 ]
 
 [tool.pytest.ini_options]
