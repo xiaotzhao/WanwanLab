@@ -1,35 +1,39 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-@File    : rotation.py
-@Path    : envs/common/rotation.py
-@Desc    : Pose & rotation utility module.
-            Implements common rotation operations including Euler angles,
-            quaternions, rotation matrices and coordinate transformations.
-            Designed for simulation environments, robot pose calculation
-            and posture conversion tasks.
-@Author  : xiaotong Zhao
-@Project : WanwanLab
-@Date    : 2026-06-15
-"""
-
+from __future__ import annotations
 
 import numpy as np
 
 
+def np_quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Multiply quaternions in NumPy, supports (N, 4) and (4,) inputs."""
+    q1_was_1d = q1.ndim == 1
+    q2_was_1d = q2.ndim == 1
+
+    if q1_was_1d:
+        q1 = q1[None, :]
+    if q2_was_1d:
+        q2 = q2[None, :]
+
+    if q1.shape[0] == 1 and q2.shape[0] > 1:
+        q1 = np.broadcast_to(q1, q2.shape)
+    elif q2.shape[0] == 1 and q1.shape[0] > 1:
+        q2 = np.broadcast_to(q2, q1.shape)
+
+    w1, x1, y1, z1 = q1[:, 0], q1[:, 1], q1[:, 2], q1[:, 3]
+    w2, x2, y2, z2 = q2[:, 0], q2[:, 1], q2[:, 2], q2[:, 3]
+    result = np.stack(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        axis=1,
+    )
+    return result[0] if q1_was_1d and q2_was_1d else result
+
+
 def np_quat_conjugate_batched(q: np.ndarray) -> np.ndarray:
-    """
-    Compute the conjugate of quaternions.
-    Quaternion format: [w, x, y, z] (w-first).
-    Supports arbitrary batch dimensions with shape (..., 4).
-    For unit quaternion, conjugate equals inverse.
-
-    Args:
-        q: Input quaternion array, last dimension must be 4.
-
-    Returns:
-        Conjugated quaternion array with the same shape as input.
-    """
+    """Conjugate quaternions with shape (..., 4), w-first."""
     if q.shape[-1] != 4:
         raise ValueError(f"Expected quaternion last dimension 4, got {q.shape}")
     conj = np.array(q, copy=True)
@@ -38,18 +42,7 @@ def np_quat_conjugate_batched(q: np.ndarray) -> np.ndarray:
 
 
 def np_quat_mul_batched(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """
-    Multiply two quaternion arrays with broadcast support.
-    Quaternion format: [w, x, y, z] (w-first).
-    Supports arbitrary leading dimensions, last dimension is fixed to 4.
-
-    Args:
-        q1: First quaternion array, shape (..., 4)
-        q2: Second quaternion array, shape (..., 4)
-
-    Returns:
-        Quaternion product after broadcasting, shape (..., 4)
-    """
+    """Multiply broadcast-compatible quaternion arrays with shape (..., 4)."""
     if q1.shape[-1] != 4 or q2.shape[-1] != 4:
         raise ValueError(f"Expected quaternion last dimension 4, got {q1.shape} and {q2.shape}")
 
@@ -70,18 +63,17 @@ def np_quat_mul_batched(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
     )
 
 
+def np_quat_conjugate(q: np.ndarray) -> np.ndarray:
+    """Conjugate of unit quaternions (N, 4) or (4,), w-first."""
+    if q.ndim == 1:
+        return np.array([q[0], -q[1], -q[2], -q[3]])
+    conj = q.copy()
+    conj[:, 1:] *= -1
+    return conj  # type: ignore[no-any-return]
+
+
 def np_quat_canonicalize(q: np.ndarray) -> np.ndarray:
-    """
-    Canonicalize quaternion sign: enforce real part w >= 0.
-    Note: q and -q represent the identical rotation.
-    Standardize representation to eliminate sign ambiguity.
-
-    Args:
-        q: Input quaternion, shape (4,) or (N, 4), w-first format.
-
-    Returns:
-        Canonicalized quaternion with non-negative w component.
-    """
+    """Flip quaternion signs so the real part is non-negative."""
     q_was_1d = q.ndim == 1
     if q_was_1d:
         q = q[None, :]
@@ -93,17 +85,7 @@ def np_quat_canonicalize(q: np.ndarray) -> np.ndarray:
 
 
 def np_quat_ensure_continuity(q: np.ndarray) -> np.ndarray:
-    """
-    Ensure continuity for quaternion time sequence (T, 4).
-    Flip sign of current quaternion if dot product with previous frame < 0.
-    Avoid sudden jumps caused by quaternion sign ambiguity in trajectory.
-
-    Args:
-        q: Quaternion time sequence, shape (T, 4), T = number of frames.
-
-    Returns:
-        Continuous quaternion sequence with smooth frame transition.
-    """
+    """Flip quaternion signs in a time sequence to keep adjacent dots non-negative."""
     if q.ndim != 2 or q.shape[1] != 4:
         raise ValueError(f"Expected quaternion sequence with shape (T, 4), got {q.shape}")
 
@@ -114,18 +96,11 @@ def np_quat_ensure_continuity(q: np.ndarray) -> np.ndarray:
     return result
 
 
-
 def np_quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
     """Convert unit quaternion batch (N, 4), w-first, to axis-angle vectors (N, 3).
 
     Adapted from PyTorch3D. Uses atan2 + Taylor expansion for numerical
     stability near zero rotation.
-
-    Args:
-        q: Unit quaternion array with shape (N, 4), order [w, x, y, z].
-
-    Returns:
-        Axis-angle representation (axis * angle), shape (N, 3).
     """
     q = np_quat_canonicalize(q)
     xyz = q[:, 1:]  # (N, 3) imaginary part
@@ -145,15 +120,7 @@ def np_quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
 
 
 def np_quat_angular_velocity(q: np.ndarray, dt: float) -> np.ndarray:
-    """Estimate angular velocity from a quaternion time sequence using shortest-arc diffs.
-
-     Args:
-         q: Quaternion time sequence with shape (T, 4), w-first unit quaternion.
-         dt: Time interval between adjacent frames, must be positive.
-
-     Returns:
-         Angular velocity sequence (T, 3), compact axis-angle format (rad/s).
-     """
+    """Estimate angular velocity from a quaternion time sequence using shortest-arc diffs."""
     if q.ndim != 2 or q.shape[1] != 4:
         raise ValueError(f"Expected quaternion sequence with shape (T, 4), got {q.shape}")
     if dt <= 0.0:
@@ -166,7 +133,7 @@ def np_quat_angular_velocity(q: np.ndarray, dt: float) -> np.ndarray:
         return omega
 
     if num_frames == 2:
-        q_rel = np_quat_mul_batched(rotations[1], np_quat_conjugate_batched(rotations[0]))
+        q_rel = np_quat_mul(rotations[1], np_quat_conjugate(rotations[0]))
         q_rel = np_quat_canonicalize(q_rel)
         angvel = np_quat_to_axis_angle(q_rel[None, :])[0] / dt
         omega[:] = angvel
@@ -174,7 +141,7 @@ def np_quat_angular_velocity(q: np.ndarray, dt: float) -> np.ndarray:
 
     q_prev = rotations[:-2]
     q_next = rotations[2:]
-    q_rel = np_quat_mul_batched(q_next, np_quat_conjugate_batched(q_prev))
+    q_rel = np_quat_mul(q_next, np_quat_conjugate(q_prev))
     q_rel = np_quat_canonicalize(q_rel)
     omega[1:-1] = np_quat_to_axis_angle(q_rel) / (2.0 * dt)
     omega[0] = omega[1]
@@ -212,7 +179,48 @@ def np_wrap_to_pi(angle: np.ndarray) -> np.ndarray:
 
 def np_quat_inv(q: np.ndarray) -> np.ndarray:
     """Inverse of unit quaternions (N, 4) or (4,), w-first."""
-    return np_quat_conjugate_batched(q)
+    return np_quat_conjugate(q)
+
+
+def np_quat_apply(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Rotate vector(s) by quaternion(s), supports batched/scalar inputs."""
+    q_was_1d = q.ndim == 1
+    v_was_1d = v.ndim == 1
+
+    if q_was_1d:
+        q = q[None, :]
+    if v_was_1d:
+        v = v[None, :]
+
+    if q.shape[0] == 1 and v.shape[0] > 1:
+        q = np.broadcast_to(q, (v.shape[0], 4))
+    elif v.shape[0] == 1 and q.shape[0] > 1:
+        v = np.broadcast_to(v, (q.shape[0], 3))
+
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    vx, vy, vz = v[:, 0], v[:, 1], v[:, 2]
+
+    t = 2 * np.stack(
+        [
+            y * vz - z * vy,
+            z * vx - x * vz,
+            x * vy - y * vx,
+        ],
+        axis=1,
+    )
+    t += 2 * w[:, None] * v
+
+    result = v + np.stack(
+        [
+            y * t[:, 2] - z * t[:, 1],
+            z * t[:, 0] - x * t[:, 2],
+            x * t[:, 1] - y * t[:, 0],
+        ],
+        axis=1,
+    )
+
+    rotated: np.ndarray = result[0] if q_was_1d and v_was_1d else result
+    return rotated
 
 
 def np_quat_apply_batched(q: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -247,7 +255,34 @@ def np_quat_apply_batched(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 def np_quat_apply_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Rotate vector(s) by inverse quaternion(s)."""
-    return np_quat_apply_batched(np_quat_inv(q), v)
+    return np_quat_apply(np_quat_inv(q), v)
+
+
+def np_quat_error_magnitude(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Angular error magnitude between quaternions (N,) or scalar."""
+    q1_was_1d = q1.ndim == 1
+    q2_was_1d = q2.ndim == 1
+
+    if q1_was_1d:
+        q1 = q1[None, :]
+    if q2_was_1d:
+        q2 = q2[None, :]
+
+    if q1.shape[0] == 1 and q2.shape[0] > 1:
+        q1 = np.broadcast_to(q1, q2.shape)
+    elif q2.shape[0] == 1 and q1.shape[0] > 1:
+        q2 = np.broadcast_to(q2, q1.shape)
+
+    # Relative rotation from q1 to q2.
+    q_rel = np_quat_mul(q2, np_quat_inv(q1))
+    q_rel = np_quat_canonicalize(q_rel)
+
+    # Use atan2-based angle extraction for better numerical behavior.
+    xyz_norm = np.linalg.norm(q_rel[:, 1:], axis=1)
+    w = np.clip(q_rel[:, 0], -1.0, 1.0)
+    error = 2.0 * np.arctan2(xyz_norm, w)
+    magnitude: np.ndarray = error[0] if q1_was_1d and q2_was_1d else error
+    return magnitude
 
 
 def np_quat_error_magnitude_batched(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
@@ -258,7 +293,6 @@ def np_quat_error_magnitude_batched(q1: np.ndarray, q2: np.ndarray) -> np.ndarra
     xyz_norm = np.linalg.norm(q_rel[..., 1:], axis=-1)
     w = np.clip(q_rel[..., 0], -1.0, 1.0)
     return 2.0 * np.arctan2(xyz_norm, w)
-
 
 
 def np_quat_error_magnitude_squared_batched(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
@@ -312,10 +346,21 @@ def np_yaw_quat(q: np.ndarray) -> np.ndarray:
     if q_was_1d:
         q = q[None, :]
 
-    yaw = np_yaw_from_quat(q)
-    res = np_yaw_to_quat(yaw)
-    return res[0] if q_was_1d else res
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    yaw = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
 
+    half_yaw = yaw * 0.5
+    result = np.stack(
+        [
+            np.cos(half_yaw),
+            np.zeros_like(half_yaw),
+            np.zeros_like(half_yaw),
+            np.sin(half_yaw),
+        ],
+        axis=1,
+    )
+
+    return result[0] if q_was_1d else result
 
 
 def np_matrix_from_quat(q: np.ndarray) -> np.ndarray:
@@ -346,7 +391,6 @@ def np_matrix_from_quat(q: np.ndarray) -> np.ndarray:
     )
 
     return result[0] if q_was_1d else result
-
 
 
 def np_matrix_first_two_cols_from_quat(q: np.ndarray) -> np.ndarray:
@@ -387,7 +431,7 @@ def np_subtract_frame_transforms(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute relative transform from frame 1 to frame 2 in frame-1 coordinates."""
     rel_pos = np_quat_apply_inverse(quat1, pos2 - pos1)
-    rel_quat = np_quat_mul_batched(np_quat_inv(quat1), quat2)
+    rel_quat = np_quat_mul(np_quat_inv(quat1), quat2)
     return rel_pos, rel_quat
 
 

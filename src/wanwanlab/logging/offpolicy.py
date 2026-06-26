@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from unilab.logging.common import BaseTrainingLogger, _fmt_number, _load_wandb
+from wanwanlab.logging.common import BaseTrainingLogger, _fmt_number, _load_wandb
 
 OFFPOLICY_COLLECTOR_TIMING_ORDER = {
     "weight_sync_ms": 0,

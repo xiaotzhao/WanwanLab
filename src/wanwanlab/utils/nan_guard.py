@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
 import logging
 import shutil
+import time
+from dataclasses import dataclass
 from pathlib import Path
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,13 @@ class NanGuardCfg:
 
 class NanGuard:
     def __init__(
-            self,
-            cfg: NanGuardCfg,
-            num_env: int,
-            supports_state_playback: bool,
+        self,
+        cfg: NanGuardCfg,
+        num_envs: int,
+        supports_state_playback: bool,
     ) -> None:
         self._cfg = cfg
-        self._num_env = num_env
+        self._num_envs = num_envs
         self._supports_state_playback = supports_state_playback
         self._buffer: list[np.ndarray] = []
         self._buffer_idx: int = 0
@@ -45,29 +46,52 @@ class NanGuard:
             self._buffer[self._buffer_idx] = physics_state
         self._buffer_idx = (self._buffer_idx + 1) % self._cfg.buffer_size
 
-
-    def check(self, obs: dict[str, np.ndarray], reward: np.ndarray) -> np.ndarray | None:
-        if not self._cfg.enabled or self._dumped:
+    def check(
+        self, obs: dict[str, np.ndarray], reward: np.ndarray, step: int = 0
+    ) -> np.ndarray | None:
+        if not self._cfg.enabled:
             return None
-        bad_mask = np.zeros(self._num_env, dtype=bool)
+        bad_mask = np.zeros(self._num_envs, dtype=bool)
         for v in obs.values():
             bad_mask |= ~np.all(np.isfinite(v), axis=tuple(range(1, v.ndim)))
         bad_mask |= ~np.isfinite(reward)
         if not np.any(bad_mask):
             return None
-        return np.flatnonzero(bad_mask).astype(np.int32)
+        nan_ids = np.flatnonzero(bad_mask).astype(np.int32)
+        logger.warning(
+            "NanGuard: NaN/Inf detected in obs/reward at step %d (envs=%d, sample_ids=%s)",
+            step,
+            len(nan_ids),
+            nan_ids[:5].tolist(),
+        )
+        return nan_ids
+
+    def check_ctrl(self, ctrl: np.ndarray, step: int = 0) -> np.ndarray | None:
+        if not self._cfg.enabled:
+            return None
+        bad_mask = ~np.all(np.isfinite(ctrl), axis=tuple(range(1, ctrl.ndim)))
+        if not np.any(bad_mask):
+            return None
+        nan_ids = np.flatnonzero(bad_mask).astype(np.int32)
+        logger.warning(
+            "NanGuard: NaN/Inf detected in ctrl at step %d (envs=%d, sample_ids=%s)",
+            step,
+            len(nan_ids),
+            nan_ids[:5].tolist(),
+        )
+        return nan_ids
 
     def dump(
-            self,
-            nan_env_ids: np.ndarray,
-            model_file: str,
-            step: int,
+        self,
+        nan_env_ids: np.ndarray,
+        model_file: str,
+        step: int,
     ) -> str | None:
         if self._dumped:
             return None
         self._dumped = True
 
-        output_dir = Path(self._cfg.output_dir or "tmp/wanwanlab/nan_dumps")
+        output_dir = Path(self._cfg.output_dir or "/tmp/wanwanlab/nan_dumps")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         dump_env_ids = nan_env_ids[: self._cfg.max_envs_to_dump]
@@ -82,7 +106,7 @@ class NanGuard:
             states = states[:, dump_env_ids]
 
         metadata = {
-            "num_envs_total": self._num_env,
+            "num_envs_total": self._num_envs,
             "nan_env_ids": nan_env_ids,
             "dumped_env_ids": dump_env_ids,
             "buffer_size": self._cfg.buffer_size,
@@ -94,12 +118,12 @@ class NanGuard:
         }
 
         ts = time.strftime("%Y%m%d_%H%M%S")
-        dump_name = f"nan_dump_{ts}_step_{step}"
+        dump_name = f"nan_dump_{ts}_step{step}"
         npz_path = output_dir / f"{dump_name}.npz"
         np.savez(
             str(npz_path),
             states=states,
-            **{f"meta_{k}": v for k, v in metadata.items()}
+            **{f"meta_{k}": v for k, v in metadata.items()},
         )
 
         if model_file and Path(model_file).is_file():
@@ -113,10 +137,7 @@ class NanGuard:
         except OSError:
             pass
 
-        logger.warning(
-            "NaN guard triggered at step %d for %d envs. Dump: %s",
-            step,
-            len(nan_env_ids),
-            npz_path,
+        logger.info(
+            "NanGuard: dump written to %s (step=%d, envs=%d)", npz_path, step, len(nan_env_ids)
         )
         return str(npz_path)

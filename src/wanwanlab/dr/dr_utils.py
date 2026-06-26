@@ -8,7 +8,7 @@ from wanwanlab.dr.types import DomainRandomizationCapabilities, ResetRandomizati
 from wanwanlab.dtype_config import get_global_dtype
 
 
-def zero_action(num_envs: int, action_dim: int) -> np.ndarray:
+def zero_actions(num_envs: int, action_dim: int) -> np.ndarray:
     return np.zeros((num_envs, action_dim), dtype=get_global_dtype())
 
 
@@ -162,7 +162,6 @@ def build_common_reset_randomization(
     return None if payload.is_empty() else payload
 
 
-        
 def validate_common_reset_randomization(
     env: Any,
     capabilities: DomainRandomizationCapabilities,

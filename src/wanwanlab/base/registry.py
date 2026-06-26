@@ -306,8 +306,23 @@ def ensure_registries(
             )
 
         for module_name in modules:
+
             if not isinstance(module_name, str) or not module_name:
                 raise TypeError(
                     f"'{package_name}.{_REGISTRY_MODULES_ATTR}' entries must be non-empty strings."
                 )
+            # noinspection PyUnreachableCode
+            try:
+                importlib.import_module(module_name)
+            except Exception as exc:
+                if fail_on_error and not is_optional:
+                    raise RuntimeError(
+                        f"Failed to import declared registry module '{module_name}' "
+                        f"from '{package_name}'. "
+                        f"Fix the import error or add '{package_name}' to optional_packages."
+                    ) from exc
+                logging.warning(
+                    "Failed to import declared registry module '%s': %s", module_name, exc
+                )
+
 

@@ -47,6 +47,10 @@ wanwanlab-render-teaser = "wanwanlab.tools.render_teaser:main"
 wanwanlab-import-robot = "wanwanlab.tools.import_robot:main"
 wanwanlab-pull-assets = "wanwanlab.tools.pull_assets:main"
 
+[project.optional-dependencies]
+motrix = ["motrixsim-core==0.8.2"]
+viser = ["viser>=1.0.26", "trimesh>=3.21.7"]
+
 [dependency-groups]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "pyright>=1.1.408"]
 
@@ -105,7 +109,7 @@ markers = [
 addopts = "--tb=short -m 'not slow'"
 
 [tool.coverage.run]
-source = ["src/unilab"]
+source = ["src/wanwanlab"]
 omit = ["*/rsl_rl/*"]
 
 [tool.coverage.report]
